@@ -1,4 +1,4 @@
-export default class Environment {
+export class Environment {
     record: object;
     parent: Environment | null;
     /**

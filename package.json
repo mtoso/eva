@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "test": "ts-node ./src/Eva.ts"
+    "test": "ts-node ./src/__tests__/run.ts"
   },
   "keywords": [],
   "author": "",

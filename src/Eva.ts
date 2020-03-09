@@ -1,11 +1,11 @@
-import assert from 'assert';
-import Environment from './Environment';
+import {Environment} from './Environment';
 
 /**
  * Eva interpreter
  */
-class Eva {
-    global: Environment;
+export class Eva {
+    private global: Environment;
+
     /**
      * Creates an instance of Eva with a global environment.
      */
@@ -62,7 +62,7 @@ class Eva {
         throw `Unimplemented: ${JSON.stringify(exp)}`
     }
 
-    _evalBlock(block, env) {
+    private _evalBlock(block, env) {
         let result;
         const [_tag, ...expressions] = block;
         expressions.forEach(exp => {
@@ -83,73 +83,3 @@ function isString(exp) {
 function isVariableName(exp) {
     return typeof exp === 'string' && /^[a-zA-Z][a-zA-Z0-9_]*$/.test(exp);
 }
-
-// Test
-const eva =  new Eva(new Environment({
-    null: null,
-    true: true,
-    false: false
-}));
-
-// Expressions:
-assert.strictEqual(eva.eval(1), 1);
-assert.strictEqual(eva.eval('"hello"'), 'hello');
-
-// Math:
-assert.strictEqual(eva.eval(['+', 1, 5]), 6);
-assert.strictEqual(eva.eval(['+', ['+', 3, 2], ['+', 3, 2]]), 10);
-assert.strictEqual(eva.eval(['-', ['-', 5, 2], 2]), 1);
-assert.strictEqual(eva.eval(['*', ['+', 3, 2], ['+', 3, 2]]), 25);
-assert.strictEqual(eva.eval(['/', ['+', 2, 2], ['+', 1, 1]]), 2);
-
-// Variables:
-assert.strictEqual(eva.eval(['var', 'x', 10]), 10);
-assert.strictEqual(eva.eval('x'), 10);
-assert.strictEqual(eva.eval(['var', 'isUser', 'true']), true);
-assert.strictEqual(eva.eval('isUser'), true);
-
-// Blocks:
-assert.strictEqual(eva.eval(
-    ['begin',
-        ['var', 'x', 10],
-        ['var', 'y', 20],
-        ['+', ['*', 'x', 'y'], 30],
-    ]),
-230);
-
-// nested blocks
-assert.strictEqual(eva.eval(
-    ['begin',
-        ['var', 'x', 10],
-        ['begin',
-            ['var', 'x', 20],
-            'x'
-        ],
-        'x'
-    ]),
-10);
-
-// access to the outer block var
-assert.strictEqual(eva.eval(
-    ['begin',
-        ['var', 'value', 10],
-        ['var', 'result', ['begin',
-            ['var', 'x', ['+', 'value', 10]],
-            'x'
-        ]],
-        'result'
-    ]),
-20);
-
-// assignement
-assert.strictEqual(eva.eval(
-    ['begin',
-        ['var', 'data', 10],
-        ['begin',
-            ['set', 'data', 100],
-        ],
-        'data'
-    ]),
-100);
-
-console.log('All assertions passed!');
