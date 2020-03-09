@@ -5,7 +5,8 @@ const tests = [
     require('./self-eval-test'),
     require('./math-test'),
     require('./variables-test'),
-    require('./block-test')
+    require('./block-test'),
+    require('./if-test'),
 ];
 
 const eva =  new Eva(new Environment({
