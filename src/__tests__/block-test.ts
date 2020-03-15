@@ -1,5 +1,6 @@
 import assert from 'assert';
 import {Eva} from '../Eva';
+import {test} from './test-utils';
 
 module.exports = (eva:Eva) => {
     assert.strictEqual(eva.eval(
@@ -34,7 +35,7 @@ module.exports = (eva:Eva) => {
         ]),
     20);
 
-    // assignement
+    // Update parent variables.
     assert.strictEqual(eva.eval(
         ['begin',
             ['var', 'data', 10],
@@ -44,4 +45,14 @@ module.exports = (eva:Eva) => {
             'data'
         ]),
     100);
+
+    test(eva,
+    `
+        (begin
+            (var x 10)
+            (var y 20)
+            (+ (* x 10)y)
+        )
+    `, 
+    120);
 }
