@@ -9,51 +9,21 @@ export class Eva {
     /**
      * Creates an instance of Eva with a global environment.
      */
-    constructor(global = new Environment()) {
+    constructor(global = GlobalEnviroment) {
         this.global = global;
     }
 
     eval(exp, env = this.global) {
         
         // Self-evaluating expressions:
-        if (isNumber(exp)) {
+        if (this._isNumber(exp)) {
             return exp;
         }
-        if (isString(exp)) {
+        
+        if (this._isString(exp)) {
             return exp.slice(1, -1);
         }
         
-        // Math operations:
-        if (exp[0] === '+') {
-            return this.eval(exp[1], env) + this.eval(exp[2], env);
-        }
-        if (exp[0] === '*') {
-            return this.eval(exp[1], env) * this.eval(exp[2], env);
-        }
-        if (exp[0] === '-') {
-            return this.eval(exp[1], env) - this.eval(exp[2], env);
-        }
-        if (exp[0] === '/') {
-            return this.eval(exp[1], env) / this.eval(exp[2], env);
-        }
-
-        // Comparison operators:
-        if(exp[0] === '>') {
-            return this.eval(exp[1], env) > this.eval(exp[2], env);
-        }
-        if(exp[0] === '>=') {
-            return this.eval(exp[1], env) >= this.eval(exp[2], env);
-        }
-        if(exp[0] === '<') {
-            return this.eval(exp[1], env) < this.eval(exp[2], env);
-        }
-        if(exp[0] === '<=') {
-            return this.eval(exp[1], env) <= this.eval(exp[2], env);
-        }
-        if(exp[0] === '=') {
-            return this.eval(exp[1], env) === this.eval(exp[2], env);
-        }
-
         // Block: sequence of expressions
         if(exp[0] === 'begin') {
             const blockEnv = new Environment({}, env);
@@ -73,7 +43,7 @@ export class Eva {
         }
 
         // Variable access: foo
-        if (isVariableName(exp)) {
+        if (this._isVariableName(exp)) {
             return env.lookup(exp);
         }
 
@@ -96,6 +66,24 @@ export class Eva {
             return result;
         }
 
+        // Function calls:
+        //
+        // (print "Hello World")
+        // (+ x 5)
+        // (> foo bar)
+
+        if (Array.isArray(exp)) {
+            const fn = this.eval(exp[0], env);
+            const args = exp.slice(1).map(arg => this.eval(arg, env));
+
+            // Native function:
+            if (typeof fn === 'function') {
+                return fn(...args);
+            }
+
+            // User-defined function:
+        }
+
         throw `Unimplemented: ${JSON.stringify(exp)}`
     }
 
@@ -107,16 +95,64 @@ export class Eva {
         });
         return result;
     }
+
+    private _isNumber(exp) {
+        return typeof exp === 'number';
+    }
+    
+    private _isString(exp) {
+        return typeof exp === 'string' && exp[0] === '"' && exp.slice(-1) === '"';
+    }
+    
+    private _isVariableName(exp) {
+        return typeof exp === 'string' && /^[+\-*/<>=a-zA-Za-zA-Z0-9_]*$/.test(exp);
+    }
 }
 
-function isNumber(exp) {
-    return typeof exp === 'number';
-}
+/**
+ * Default Global Eviroment
+ */
+const GlobalEnviroment = new Environment({
+    null: null,
 
-function isString(exp) {
-    return typeof exp === 'string' && exp[0] === '"' && exp.slice(-1) === '"';
-}
+    true: true,
+    false: false,
 
-function isVariableName(exp) {
-    return typeof exp === 'string' && /^[a-zA-Z][a-zA-Z0-9_]*$/.test(exp);
-}
+    VERSION: '0.1',
+
+    // Operators:
+    '+'(op1: number, op2: number) { 
+        return op1 + op2 
+    },
+    '*'(op1: number, op2: number) { 
+        return op1 * op2
+    },
+    '-'(op1: number, op2 = null) {
+        if (op2 == null) {
+            return -op1;
+        }
+        return op1 - op2;
+    },
+    '/'(op1: number, op2) { 
+        return op1 / op2
+    },
+
+    //Comparison:
+    '>'(op1: number, op2: number) { 
+        return op1 > op2 
+    },
+    '>='(op1: number, op2: number) { 
+        return op1 >= op2
+    },
+    '<'(op1: number, op2: number) { 
+        return op1 < op2 
+    },
+    '<='(op1: number, op2: number) { 
+        return op1 <= op2
+    },
+    '='(op1: number, op2: number) {
+        return op1 === op2
+    },
+
+    print: (...args) => console.log(...args)
+});

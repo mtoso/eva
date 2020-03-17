@@ -107,7 +107,7 @@ let tokenizer;
 const lexRules = [[/^\s+/, function() { /* skip all the withespaces */ }],
 [/^"[^\"]*"/, function() { return 'STRING' }],
 [/^\d+/, function() { return 'NUMBER' }],
-[/^[\w+*=<>/]+/, function() { return 'SYMBOL' }],
+[/^[\w\-+*=<>/]+/, function() { return 'SYMBOL' }],
 [/^\(/, function() { return "'('"; }],
 [/^\)/, function() { return "')'"; }]];
 const lexRulesByConditions = {"INITIAL":[0,1,2,3,4,5]};
