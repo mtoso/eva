@@ -66,11 +66,24 @@ export class Eva {
             return result;
         }
 
+        // Function declaration: (def square (x) (* x x))
+        if (exp[0] === 'def') {
+            const [_tag, name, params, body] = exp;
+            const fn = {
+                params,
+                body,
+                env // closure
+            };
+            // install the fn in the env
+            return env.define(name, fn);
+        }
+
+
         // Function calls:
         //
         // (print "Hello World")
-        // (+ x 5)
-        // (> foo bar)
+        // (+ x 5) built-in + fn
+        // (> foo bar) built-in > fn
 
         if (Array.isArray(exp)) {
             const fn = this.eval(exp[0], env);
@@ -82,9 +95,31 @@ export class Eva {
             }
 
             // User-defined function:
+            const activationRecord = {};
+
+            // instoll all the params with the passed arguments
+            fn.params.forEach((param, index) => {
+                activationRecord[param] = args[index];
+            });
+
+            const activationEnviroment = new Environment(
+                activationRecord,
+                fn.env // static scope
+            );
+
+            return this._evalBody(fn.body, activationEnviroment);
         }
 
         throw `Unimplemented: ${JSON.stringify(exp)}`
+    }
+
+    private _evalBody(body, env) {
+        // if it is a block
+        if (body[0] === 'begin') {
+            return this._evalBlock(body, env);
+        }
+        // or is a simple expression
+        return this.eval(body, env);
     }
 
     private _evalBlock(block, env) {
