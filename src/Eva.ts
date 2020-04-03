@@ -1,26 +1,37 @@
 import {Environment} from './Environment';
 
+interface StackFrame {
+    env: Environment;
+    fnName: String;
+}
+
 /**
  * Eva interpreter
  */
 export class Eva {
     private global: Environment;
+    private executionStack: StackFrame[];
 
     /**
      * Creates an instance of Eva with a global environment.
      */
     constructor(global = GlobalEnviroment) {
         this.global = global;
+        this.executionStack = [];
     }
 
     eval(exp, env = this.global) {
+
+        if (exp[0] === 'print_stack_trace') {
+            return this._printStackTrace();
+        }
         
         // Self-evaluating expressions:
-        if (this._isNumber(exp)) {
+        if (this._isNumberLiteral(exp)) {
             return exp;
         }
         
-        if (this._isString(exp)) {
+        if (this._isStringLiteral(exp)) {
             return exp.slice(1, -1);
         }
         
@@ -78,7 +89,9 @@ export class Eva {
             return this.eval(varExp, env);
         }
 
-        // Lambda function: (lambda (x) (* x x))
+        // Lambda function: 
+        //
+        // (lambda (x) (* x x))
         if (exp[0] === 'lambda') {
             const [_tag, params, body] = exp;
             return {
@@ -88,15 +101,22 @@ export class Eva {
             }
         }
 
-        // Function calls:
+        // Function calls (execution):
         //
-        // (print "Hello World")
-        // (+ x 5) built-in + fn
-        // (> foo bar) built-in > fn
-
+        // (print "Hello World") built-in "print" fn call
+        // (square 2) user-defined "square" fn call
+        // (+ x 5) built-in "plus" operator fn call
+        // (> foo bar) built-in "greater" operator fn call
         if (Array.isArray(exp)) {
             const fn = this.eval(exp[0], env);
             const args = exp.slice(1).map(arg => this.eval(arg, env));
+            
+            // Save the execution context stack
+            const fnName = typeof exp[0] === 'string' ? exp[0] : '(anonymous)';
+            this.executionStack.push({
+                env: fn.env,
+                fnName
+            });
 
             // Native function:
             if (typeof fn === 'function') {
@@ -106,7 +126,7 @@ export class Eva {
             // User-defined function:
             const activationRecord = {};
 
-            // instoll all the params with the passed arguments
+            // Install all the params with the passed arguments
             fn.params.forEach((param, index) => {
                 activationRecord[param] = args[index];
             });
@@ -140,16 +160,22 @@ export class Eva {
         return result;
     }
 
-    private _isNumber(exp) {
+    private _isNumberLiteral(exp) {
         return typeof exp === 'number';
     }
     
-    private _isString(exp) {
+    private _isStringLiteral(exp) {
         return typeof exp === 'string' && exp[0] === '"' && exp.slice(-1) === '"';
     }
     
     private _isVariableName(exp) {
         return typeof exp === 'string' && /^[+\-*/<>=a-zA-Za-zA-Z0-9_]*$/.test(exp);
+    }
+
+    private _printStackTrace() {
+        this.executionStack.reverse().forEach(stackFrame => {
+            console.log(`${stackFrame.fnName}: ${stackFrame.env}`);
+        });
     }
 }
 

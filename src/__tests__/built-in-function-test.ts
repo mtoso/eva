@@ -9,10 +9,13 @@ module.exports = (eva:Eva) => {
     test(eva, `(* (+ 3 2) (+ 3 2))`, 25);
     test(eva, `(/ (+ 2 2) (+ 1 1))`, 2);
 
-    // // Comparison:
+    // Comparison:
     test(eva, `(> 1 5)`, false);
     test(eva, `(< 1 5)`, true);
     test(eva, `(>= 5 5)`, true);
     test(eva, `(<= 5 5)`, true);
     test(eva, `(= 5 5)`, true);
+
+    // Print:
+    test(eva, `(print "Test print fn:" "Hello World!")`, undefined);
 }

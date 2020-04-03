@@ -1,5 +1,4 @@
 import {Eva} from '../Eva';
-import {Environment} from '../Environment';
 
 const tests = [
     require('./self-eval-test'),
@@ -17,6 +16,4 @@ const eva =  new Eva();
 
 tests.forEach(test => test(eva));
 
-eva.eval(['print', '"Hello"', '"World!"'])
-
-console.log('All assertions passed!');
+console.log('\nAll assertions passed!\n');
