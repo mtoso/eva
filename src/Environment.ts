@@ -1,6 +1,7 @@
 export class Environment {
-    record: object;
-    parent: Environment | null;
+    private record: object;
+    private parent: Environment | null;
+
     /**
      * Creates an environment with the given record.
      */
@@ -12,7 +13,7 @@ export class Environment {
     /**
      * Creates a variable with the given name and value
      */
-    define(name, value) {
+    define(name: string, value) {
         this.record[name] = value;
         return value;
     }
@@ -20,7 +21,7 @@ export class Environment {
     /**
      * Updates an existing variable.
      */
-    assign(name, value) {
+    assign(name: string, value) {
         this.resolve(name).record[name] = value;
         return value;
     }
@@ -29,7 +30,7 @@ export class Environment {
      * Returns the value of a defined variable or throws
      * if the variable is not defined
      */
-    lookup(name) {
+    lookup(name: string) {
         return this.resolve(name).record[name];
     }
     
@@ -37,7 +38,7 @@ export class Environment {
      * Returns specific enviroment in which a variable is defined, or
      * throws if a variable is not defined.
      */
-    resolve(name) {
+    resolve(name: string) {
         if(this.record.hasOwnProperty(name)) {
             return this;
         }

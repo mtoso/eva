@@ -1,9 +1,46 @@
 import {Environment} from './Environment';
+import { Transformer } from './transform/Transformer';
 
 interface StackFrame {
     env: Environment;
     fnName: String;
 }
+
+type BinaryOperator = 
+    '+'
+    | '-'
+    | '*'
+    | '/'
+    | '<'
+    | '>'
+    | '='
+    | '>='
+    | '<='
+
+type NumberLiteral = number;
+type StringLiteral = string;
+type BlockExpression = ['begin', ...Expression[]];
+type VariableDeclarationExpression = ['var', string, Expression];
+type VariableUpdateExpression = ['set', string, Expression];
+type VariableAccesExpression = string;
+type IfExpression = ['if', Expression, Expression, Expression];
+type WhileExpression = ['while', Expression, Expression];
+type FunctionExpression = ['def', string, string[], Expression];
+type LambdaExpression = ['lambda', string[], Expression];
+type BinaryExpression = [BinaryOperator, Expression, Expression];
+
+type Expression = 
+    NumberLiteral
+    | StringLiteral
+    | BlockExpression
+    | VariableDeclarationExpression
+    | VariableUpdateExpression
+    | VariableAccesExpression
+    | IfExpression
+    | WhileExpression
+    | FunctionExpression
+    | LambdaExpression
+    | BinaryExpression;
 
 /**
  * Eva interpreter
@@ -11,6 +48,7 @@ interface StackFrame {
 export class Eva {
     private global: Environment;
     private executionStack: StackFrame[];
+    private transformer: Transformer;
 
     /**
      * Creates an instance of Eva with a global environment.
@@ -18,9 +56,10 @@ export class Eva {
     constructor(global = GlobalEnviroment) {
         this.global = global;
         this.executionStack = [];
+        this.transformer = new Transformer();
     }
 
-    eval(exp, env = this.global) {
+    eval(exp: Expression, env = this.global) {
 
         if (exp[0] === 'print_stack_trace') {
             return this._printStackTrace();
@@ -28,39 +67,39 @@ export class Eva {
         
         // Self-evaluating expressions:
         if (this._isNumberLiteral(exp)) {
-            return exp;
+            return (exp as NumberLiteral);
         }
         
         if (this._isStringLiteral(exp)) {
-            return exp.slice(1, -1);
+            return (exp as StringLiteral).slice(1, -1);
         }
         
         // Block: sequence of expressions
         if(exp[0] === 'begin') {
             const blockEnv = new Environment({}, env);
-            return this._evalBlock(exp, blockEnv);
+            return this._evalBlock(exp as BlockExpression, blockEnv);
         }
 
         // Variable declaration: (var foo 10)
         if (exp[0] === 'var') {
-            const [_, name, value] = exp;
+            const [_, name, value] = (exp as VariableDeclarationExpression);
             return env.define(name, this.eval(value, env));
         }
 
         // Variable update: (set foo 100)
         if (exp[0] === 'set') {
-            const [_, name, value] = exp;
+            const [_, name, value] = (exp as VariableUpdateExpression);
             return env.assign(name, this.eval(value, env));
         }
 
         // Variable access: foo
         if (this._isVariableName(exp)) {
-            return env.lookup(exp);
+            return env.lookup((exp as VariableAccesExpression));
         }
 
         // if-expression:
         if (exp[0] === 'if') {
-            const [_tag, condition, consequent, alternate] = exp;
+            const [_tag, condition, consequent, alternate] = (exp as IfExpression);
             if (this.eval(condition, env)) {
                 return this.eval(consequent, env);
             }
@@ -69,7 +108,7 @@ export class Eva {
 
         // while-expression:
         if (exp[0] === 'while') {
-            const [_tag, condition, body] = exp;
+            const [_tag, condition, body] = (exp as WhileExpression);
             let result;
             while (this.eval(condition, env)) {
                 result = this.eval(body, env);
@@ -81,10 +120,10 @@ export class Eva {
         //
         // Syntatic sugar for: (var square (lambda (x) (* x x)))
         if (exp[0] === 'def') {
-            const [_tag, name, params, body] = exp;
+            const [_tag, name, params, body] = (exp as FunctionExpression);
 
             // JIT-transpile to a variable declaration
-            const varExp = ['var', name, ['lambda', params, body]];
+            const varExp: VariableDeclarationExpression = ['var', name, ['lambda', params, body]];
             
             return this.eval(varExp, env);
         }
@@ -93,7 +132,7 @@ export class Eva {
         //
         // (lambda (x) (* x x))
         if (exp[0] === 'lambda') {
-            const [_tag, params, body] = exp;
+            const [_tag, params, body] = (exp as LambdaExpression);
             return {
                 params,
                 body,
@@ -109,7 +148,7 @@ export class Eva {
         // (> foo bar) built-in "greater" operator fn call
         if (Array.isArray(exp)) {
             const fn = this.eval(exp[0], env);
-            const args = exp.slice(1).map(arg => this.eval(arg, env));
+            const args = exp.slice(1).map((arg: Expression) => this.eval(arg, env));
             
             // Save the execution context stack
             const fnName = typeof exp[0] === 'string' ? exp[0] : '(anonymous)';
@@ -151,7 +190,7 @@ export class Eva {
         return this.eval(body, env);
     }
 
-    private _evalBlock(block, env) {
+    private _evalBlock(block: BlockExpression, env: Environment) {
         let result;
         const [_tag, ...expressions] = block;
         expressions.forEach(exp => {
@@ -160,11 +199,11 @@ export class Eva {
         return result;
     }
 
-    private _isNumberLiteral(exp) {
+    private _isNumberLiteral(exp: Expression) {
         return typeof exp === 'number';
     }
     
-    private _isStringLiteral(exp) {
+    private _isStringLiteral(exp: Expression) {
         return typeof exp === 'string' && exp[0] === '"' && exp.slice(-1) === '"';
     }
     
