@@ -17,32 +17,42 @@ export type BinaryOperator =
     | '>='
     | '<='
 
+export type UpdateOperator = 
+    '++'
+    | '--'
+    | '+='
+    | '-='
+
 export type NumberLiteral = number;
 export type StringLiteral = string;
 export type BlockExpression = ['begin', ...Expression[]];
-export type VariableDeclarationExpression = ['var', VariableIdentifier, Expression];
-export type VariableUpdateExpression = ['set', string, Expression];
 export type VariableIdentifier = string;
+export type VariableDeclarationExpression = ['var', VariableIdentifier, Expression];
+export type VariableAssignmentExpression= ['set', VariableIdentifier, Expression];
 export type IfExpression = ['if', Expression, Expression, Expression];
 export type WhileExpression = ['while', Expression, Expression];
 export type FunctionExpression = ['def', string, string[], Expression];
 export type LambdaExpression = ['lambda', string[], Expression];
 export type BinaryExpression = [BinaryOperator, Expression, Expression];
-export type SwithcExpression = ['switch', ...any[]];
+export type SwitchExpression = ['switch', Expression[], ['else', Expression]];
+export type ForExpression = ['for', Expression, Expression, Expression, Expression];
+export type UpdateExpression = [UpdateOperator, VariableIdentifier, Expression | null];
 
 export type Expression = 
     NumberLiteral
     | StringLiteral
     | BlockExpression
     | VariableDeclarationExpression
-    | VariableUpdateExpression
+    | VariableAssignmentExpression
     | VariableIdentifier
     | IfExpression
     | WhileExpression
     | FunctionExpression
     | LambdaExpression
     | BinaryExpression
-    | SwithcExpression;
+    | SwitchExpression
+    | ForExpression
+    | UpdateExpression;
 
 /**
  * Eva interpreter
@@ -88,9 +98,9 @@ export class Eva {
             return env.define(name, this.eval(value, env));
         }
 
-        // Variable update: (set foo 100)
+        // Variable assignment: (set foo 100)
         if (exp[0] === 'set') {
-            const [_, name, value] = (exp as VariableUpdateExpression);
+            const [_, name, value] = (exp as VariableAssignmentExpression);
             return env.assign(name, this.eval(value, env));
         }
 
@@ -132,8 +142,26 @@ export class Eva {
         // Syntatic sugar for nested if-expresions
         if (exp[0] === 'switch') {
             // JIT-transpile to if-expression
-            const ifExp = this.#transformer.transfromSwitchToIf(exp as SwithcExpression);
+            const ifExp = this.#transformer.transfromSwitchToIf(exp as SwitchExpression);
             return this.eval(ifExp, env);
+        }
+
+        // For-expression: (for (init) (condition) (modifier) (exp))
+        //
+        // Syntatic sugar for nested while-expresions
+        if (exp[0] === 'for') {
+            // JIT-transpile to while-expression
+            const blockExp = this.#transformer.transformForToWhile(exp as ForExpression);
+            return this.eval(blockExp, env);
+        }
+
+        // ++ Operator: (++ x)
+        //
+        // Syntatic sugar for (set x (+ x 1))
+        if (exp[0] === '++' || exp[0] === '--' || exp[0] === '+=' || exp[0] === '-=') {
+            // JIT-transpile to set-expression
+            const varUpdateExp = this.#transformer.transfromUpdateToSet(exp as UpdateExpression);
+            return this.eval(varUpdateExp, env);
         }
 
         // Lambda function: 
@@ -156,7 +184,7 @@ export class Eva {
         // (> foo bar) built-in "greater" operator fn call
         if (Array.isArray(exp)) {
             const fn = this.eval(exp[0], env);
-            const args = exp.slice(1).map((arg: Expression) => this.eval(arg, env));
+            const args = (exp.slice(1) as Expression[]).map(arg => this.eval(arg, env));
             
             // Save the execution context stack
             const fnName = typeof exp[0] === 'string' ? exp[0] : '(anonymous)';
