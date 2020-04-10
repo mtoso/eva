@@ -6,7 +6,7 @@ interface StackFrame {
     fnName: String;
 }
 
-type BinaryOperator = 
+export type BinaryOperator = 
     '+'
     | '-'
     | '*'
@@ -17,54 +17,52 @@ type BinaryOperator =
     | '>='
     | '<='
 
-type NumberLiteral = number;
-type StringLiteral = string;
-type BlockExpression = ['begin', ...Expression[]];
-type VariableDeclarationExpression = ['var', string, Expression];
-type VariableUpdateExpression = ['set', string, Expression];
-type VariableAccesExpression = string;
-type IfExpression = ['if', Expression, Expression, Expression];
-type WhileExpression = ['while', Expression, Expression];
-type FunctionExpression = ['def', string, string[], Expression];
-type LambdaExpression = ['lambda', string[], Expression];
-type BinaryExpression = [BinaryOperator, Expression, Expression];
+export type NumberLiteral = number;
+export type StringLiteral = string;
+export type BlockExpression = ['begin', ...Expression[]];
+export type VariableDeclarationExpression = ['var', VariableIdentifier, Expression];
+export type VariableUpdateExpression = ['set', string, Expression];
+export type VariableIdentifier = string;
+export type IfExpression = ['if', Expression, Expression, Expression];
+export type WhileExpression = ['while', Expression, Expression];
+export type FunctionExpression = ['def', string, string[], Expression];
+export type LambdaExpression = ['lambda', string[], Expression];
+export type BinaryExpression = [BinaryOperator, Expression, Expression];
+export type SwithcExpression = ['switch', ...any[]];
 
-type Expression = 
+export type Expression = 
     NumberLiteral
     | StringLiteral
     | BlockExpression
     | VariableDeclarationExpression
     | VariableUpdateExpression
-    | VariableAccesExpression
+    | VariableIdentifier
     | IfExpression
     | WhileExpression
     | FunctionExpression
     | LambdaExpression
-    | BinaryExpression;
+    | BinaryExpression
+    | SwithcExpression;
 
 /**
  * Eva interpreter
  */
 export class Eva {
-    private global: Environment;
-    private executionStack: StackFrame[];
-    private transformer: Transformer;
+    #global: Environment;
+    #executionStack: StackFrame[];
+    #transformer: Transformer;
 
     /**
      * Creates an instance of Eva with a global environment.
      */
     constructor(global = GlobalEnviroment) {
-        this.global = global;
-        this.executionStack = [];
-        this.transformer = new Transformer();
+        this.#global = global;
+        this.#executionStack = [];
+        this.#transformer = new Transformer();
     }
 
-    eval(exp: Expression, env = this.global) {
+    eval(exp: Expression, env = this.#global) {
 
-        if (exp[0] === 'print_stack_trace') {
-            return this._printStackTrace();
-        }
-        
         // Self-evaluating expressions:
         if (this._isNumberLiteral(exp)) {
             return (exp as NumberLiteral);
@@ -72,6 +70,10 @@ export class Eva {
         
         if (this._isStringLiteral(exp)) {
             return (exp as StringLiteral).slice(1, -1);
+        }
+
+        if (exp[0] === 'print_stack_trace') {
+            return this._printStackTrace();
         }
         
         // Block: sequence of expressions
@@ -94,7 +96,7 @@ export class Eva {
 
         // Variable access: foo
         if (this._isVariableName(exp)) {
-            return env.lookup((exp as VariableAccesExpression));
+            return env.lookup((exp as VariableIdentifier));
         }
 
         // if-expression:
@@ -120,12 +122,18 @@ export class Eva {
         //
         // Syntatic sugar for: (var square (lambda (x) (* x x)))
         if (exp[0] === 'def') {
-            const [_tag, name, params, body] = (exp as FunctionExpression);
-
             // JIT-transpile to a variable declaration
-            const varExp: VariableDeclarationExpression = ['var', name, ['lambda', params, body]];
-            
+            const varExp = this.#transformer.transformDefToVarLambda(exp as FunctionExpression);
             return this.eval(varExp, env);
+        }
+
+        // Switch-expression: (switch (cond1, block1) ...)
+        //
+        // Syntatic sugar for nested if-expresions
+        if (exp[0] === 'switch') {
+            // JIT-transpile to if-expression
+            const ifExp = this.#transformer.transfromSwitchToIf(exp as SwithcExpression);
+            return this.eval(ifExp, env);
         }
 
         // Lambda function: 
@@ -152,7 +160,7 @@ export class Eva {
             
             // Save the execution context stack
             const fnName = typeof exp[0] === 'string' ? exp[0] : '(anonymous)';
-            this.executionStack.push({
+            this.#executionStack.push({
                 env: fn.env,
                 fnName
             });
@@ -212,7 +220,7 @@ export class Eva {
     }
 
     private _printStackTrace() {
-        this.executionStack.reverse().forEach(stackFrame => {
+        this.#executionStack.reverse().forEach(stackFrame => {
             console.log(`${stackFrame.fnName}: ${stackFrame.env}`);
         });
     }
