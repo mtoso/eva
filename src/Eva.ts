@@ -1,4 +1,4 @@
-import {Environment} from './Environment';
+import { Environment } from './Environment';
 import { Transformer } from './transform/Transformer';
 
 interface StackFrame {
@@ -6,7 +6,7 @@ interface StackFrame {
     fnName: String;
 }
 
-export type BinaryOperator = 
+export type BinaryOperator =
     '+'
     | '-'
     | '*'
@@ -17,7 +17,7 @@ export type BinaryOperator =
     | '>='
     | '<='
 
-export type UpdateOperator = 
+export type UpdateOperator =
     '++'
     | '--'
     | '+='
@@ -28,7 +28,7 @@ export type StringLiteral = string;
 export type BlockExpression = ['begin', ...Expression[]];
 export type VariableIdentifier = string;
 export type VariableDeclarationExpression = ['var', VariableIdentifier, Expression];
-export type VariableAssignmentExpression= ['set', VariableIdentifier, Expression];
+export type VariableAssignmentExpression = ['set', VariableIdentifier|ClassPropertyAccess, Expression];
 export type IfExpression = ['if', Expression, Expression, Expression];
 export type WhileExpression = ['while', Expression, Expression];
 export type FunctionExpression = ['def', string, string[], Expression];
@@ -37,8 +37,11 @@ export type BinaryExpression = [BinaryOperator, Expression, Expression];
 export type SwitchExpression = ['switch', Expression[], ['else', Expression]];
 export type ForExpression = ['for', Expression, Expression, Expression, Expression];
 export type UpdateExpression = [UpdateOperator, VariableIdentifier, Expression | null];
+export type ClassExpression = ['class', string, string | null, Expression];
+export type ClassInstantiationExpression = ['new', string, ...any[]];
+export type ClassPropertyAccess = ['prop', string, string];
 
-export type Expression = 
+export type Expression =
     NumberLiteral
     | StringLiteral
     | BlockExpression
@@ -52,7 +55,10 @@ export type Expression =
     | BinaryExpression
     | SwitchExpression
     | ForExpression
-    | UpdateExpression;
+    | UpdateExpression
+    | ClassExpression
+    | ClassInstantiationExpression
+    | ClassPropertyAccess;
 
 /**
  * Eva interpreter
@@ -77,7 +83,7 @@ export class Eva {
         if (this._isNumberLiteral(exp)) {
             return (exp as NumberLiteral);
         }
-        
+
         if (this._isStringLiteral(exp)) {
             return (exp as StringLiteral).slice(1, -1);
         }
@@ -85,9 +91,9 @@ export class Eva {
         if (exp[0] === 'print_stack_trace') {
             return this._printStackTrace();
         }
-        
+
         // Block: sequence of expressions
-        if(exp[0] === 'begin') {
+        if (exp[0] === 'begin') {
             const blockEnv = new Environment({}, env);
             return this._evalBlock(exp as BlockExpression, blockEnv);
         }
@@ -100,8 +106,20 @@ export class Eva {
 
         // Variable assignment: (set foo 100)
         if (exp[0] === 'set') {
-            const [_, name, value] = (exp as VariableAssignmentExpression);
-            return env.assign(name, this.eval(value, env));
+            const [_, ref, value] = (exp as VariableAssignmentExpression);
+            
+            // Assignment to a property:
+            if (ref[0] === 'prop') {
+                const [_tag, instance, propName] = ref as ClassPropertyAccess;
+                const instanceEnv: Environment = this.eval(instance, env);
+                return instanceEnv.define(
+                    propName,
+                    this.eval(value, env)
+                );
+            }
+
+            // Simple assignment
+            return env.assign(ref as VariableIdentifier, this.eval(value, env));
         }
 
         // Variable access: foo
@@ -164,9 +182,7 @@ export class Eva {
             return this.eval(varUpdateExp, env);
         }
 
-        // Lambda function: 
-        //
-        // (lambda (x) (* x x))
+        // Lambda function: (lambda (x) (* x x))
         if (exp[0] === 'lambda') {
             const [_tag, params, body] = (exp as LambdaExpression);
             return {
@@ -174,6 +190,46 @@ export class Eva {
                 body,
                 env, // Closure
             }
+        }
+
+        // Class declaration: (class <ClassName> <Parent> <Body>)
+        if (exp[0] === 'class') {
+            const [_tag, name, parent, body] = exp as ClassExpression;
+
+            // A class is an enviroment! -- a storage of methods and shared properties.
+            const parentEnv: Environment = this.eval(parent, env) || env;
+
+            const classEnv = new Environment({}, parentEnv);
+
+            // Body is evaluated in the class enviroment.
+            this._evalBody(body, classEnv);
+
+            // Class is accesible by name.
+            return env.define(name, classEnv);
+        }
+
+        // Class instantiation: (new <ClassName> <Arguments>...)
+        if (exp[0] === 'new') {
+            const [_tag, className] = (exp as ClassInstantiationExpression);
+            const classEnv: Environment = this.eval(className, env);
+
+            // An instance of a class is an environment
+            // The `parent` component of the instance environment
+            // is set to its class environment.
+            const instanceEnv = new Environment({}, classEnv);
+            const args = (exp as ClassInstantiationExpression).slice(2).map(arg => this.eval(arg, env));
+            this._callUserDefinedFunction(
+                classEnv.lookup('constructor'),
+                [instanceEnv, ...args]
+            );
+            return instanceEnv;
+        }
+
+        // Property access: (prop <instance> <name>)
+        if(exp[0] === 'prop') {
+            const [_tag, instance, name] = exp as ClassPropertyAccess;
+            const instanceEnv: Environment = this.eval(instance, env);
+            return instanceEnv.lookup(name);
         }
 
         // Function calls (execution):
@@ -185,7 +241,7 @@ export class Eva {
         if (Array.isArray(exp)) {
             const fn = this.eval(exp[0], env);
             const args = (exp.slice(1) as Expression[]).map(arg => this.eval(arg, env));
-            
+
             // Save the execution context stack
             const fnName = typeof exp[0] === 'string' ? exp[0] : '(anonymous)';
             this.#executionStack.push({
@@ -198,29 +254,33 @@ export class Eva {
                 return fn(...args);
             }
 
-            // User-defined function:
-            const activationRecord = {};
-
-            // Install all the params with the passed arguments
-            fn.params.forEach((param, index) => {
-                activationRecord[param] = args[index];
-            });
-
-            const activationEnviroment = new Environment(
-                activationRecord,
-                fn.env // static scope
-            );
-
-            return this._evalBody(fn.body, activationEnviroment);
+            return this._callUserDefinedFunction(fn, args);
         }
 
         throw `Unimplemented: ${JSON.stringify(exp)}`
     }
 
-    private _evalBody(body, env) {
+    private _callUserDefinedFunction(fn, args) {
+        // User-defined function:
+        const activationRecord = {};
+
+        // Install all the params with the passed arguments
+        fn.params.forEach((param, index) => {
+            activationRecord[param] = args[index];
+        });
+
+        const activationEnviroment = new Environment(
+            activationRecord,
+            fn.env // static scope
+        );
+
+        return this._evalBody(fn.body, activationEnviroment);
+    }
+
+    private _evalBody(body: Expression, env: Environment) {
         // if it is a block
         if (body[0] === 'begin') {
-            return this._evalBlock(body, env);
+            return this._evalBlock((body as BlockExpression), env);
         }
         // or is a simple expression
         return this.eval(body, env);
@@ -238,11 +298,11 @@ export class Eva {
     private _isNumberLiteral(exp: Expression) {
         return typeof exp === 'number';
     }
-    
+
     private _isStringLiteral(exp: Expression) {
         return typeof exp === 'string' && exp[0] === '"' && exp.slice(-1) === '"';
     }
-    
+
     private _isVariableName(exp) {
         return typeof exp === 'string' && /^[+\-*/<>=a-zA-Za-zA-Z0-9_]*$/.test(exp);
     }
@@ -266,10 +326,10 @@ const GlobalEnviroment = new Environment({
     VERSION: '0.1',
 
     // Operators:
-    '+'(op1: number, op2: number) { 
-        return op1 + op2 
+    '+'(op1: number, op2: number) {
+        return op1 + op2
     },
-    '*'(op1: number, op2: number) { 
+    '*'(op1: number, op2: number) {
         return op1 * op2
     },
     '-'(op1: number, op2 = null) {
@@ -278,21 +338,21 @@ const GlobalEnviroment = new Environment({
         }
         return op1 - op2;
     },
-    '/'(op1: number, op2) { 
+    '/'(op1: number, op2) {
         return op1 / op2
     },
 
     //Comparison:
-    '>'(op1: number, op2: number) { 
-        return op1 > op2 
+    '>'(op1: number, op2: number) {
+        return op1 > op2
     },
-    '>='(op1: number, op2: number) { 
+    '>='(op1: number, op2: number) {
         return op1 >= op2
     },
-    '<'(op1: number, op2: number) { 
-        return op1 < op2 
+    '<'(op1: number, op2: number) {
+        return op1 < op2
     },
-    '<='(op1: number, op2: number) { 
+    '<='(op1: number, op2: number) {
         return op1 <= op2
     },
     '='(op1: number, op2: number) {
