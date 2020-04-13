@@ -13,6 +13,10 @@ export class Environment {
         this.#record = record;
         this.#parent = parent;
     }
+
+    get parent() {
+        return this.#parent;
+    }
     
     /**
      * Creates a variable with the given name and value

@@ -28,7 +28,7 @@ export type StringLiteral = string;
 export type BlockExpression = ['begin', ...Expression[]];
 export type VariableIdentifier = string;
 export type VariableDeclarationExpression = ['var', VariableIdentifier, Expression];
-export type VariableAssignmentExpression = ['set', VariableIdentifier|ClassPropertyAccess, Expression];
+export type VariableAssignmentExpression = ['set', VariableIdentifier|ClassPropertyAccessExpression, Expression];
 export type IfExpression = ['if', Expression, Expression, Expression];
 export type WhileExpression = ['while', Expression, Expression];
 export type FunctionExpression = ['def', string, string[], Expression];
@@ -39,7 +39,8 @@ export type ForExpression = ['for', Expression, Expression, Expression, Expressi
 export type UpdateExpression = [UpdateOperator, VariableIdentifier, Expression | null];
 export type ClassExpression = ['class', string, string | null, Expression];
 export type ClassInstantiationExpression = ['new', string, ...any[]];
-export type ClassPropertyAccess = ['prop', string, string];
+export type ClassPropertyAccessExpression = ['prop', string, string];
+export type ClassSuperExpression = ['super', string];
 
 export type Expression =
     NumberLiteral
@@ -58,7 +59,8 @@ export type Expression =
     | UpdateExpression
     | ClassExpression
     | ClassInstantiationExpression
-    | ClassPropertyAccess;
+    | ClassPropertyAccessExpression
+    | ClassSuperExpression;
 
 /**
  * Eva interpreter
@@ -72,11 +74,21 @@ export class Eva {
      * Creates an instance of Eva with a global environment.
      */
     constructor(global = GlobalEnviroment) {
-        this.#global = global;
+        this.#global = global;        
         this.#executionStack = [];
         this.#transformer = new Transformer();
     }
 
+    /**
+     * Evaluates global code wrapping into a block.
+     */
+    evalGlobal(exp: Expression) {
+        return this._evalBody(exp,this.#global);
+    }
+
+    /**
+     * Evaluates an expression in a given environment.
+     */
     eval(exp: Expression, env = this.#global) {
 
         // Self-evaluating expressions:
@@ -110,7 +122,7 @@ export class Eva {
             
             // Assignment to a property:
             if (ref[0] === 'prop') {
-                const [_tag, instance, propName] = ref as ClassPropertyAccess;
+                const [_tag, instance, propName] = ref as ClassPropertyAccessExpression;
                 const instanceEnv: Environment = this.eval(instance, env);
                 return instanceEnv.define(
                     propName,
@@ -198,7 +210,6 @@ export class Eva {
 
             // A class is an enviroment! -- a storage of methods and shared properties.
             const parentEnv: Environment = this.eval(parent, env) || env;
-
             const classEnv = new Environment({}, parentEnv);
 
             // Body is evaluated in the class enviroment.
@@ -206,6 +217,12 @@ export class Eva {
 
             // Class is accesible by name.
             return env.define(name, classEnv);
+        }
+
+        // Super expression: (super <ClassNeame>)
+        if (exp[0] === 'super') {
+            const [_tag, className] = exp as ClassSuperExpression;
+            return (this.eval(className, env) as Environment).parent;
         }
 
         // Class instantiation: (new <ClassName> <Arguments>...)
@@ -227,7 +244,7 @@ export class Eva {
 
         // Property access: (prop <instance> <name>)
         if(exp[0] === 'prop') {
-            const [_tag, instance, name] = exp as ClassPropertyAccess;
+            const [_tag, instance, name] = exp as ClassPropertyAccessExpression;
             const instanceEnv: Environment = this.eval(instance, env);
             return instanceEnv.lookup(name);
         }

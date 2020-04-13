@@ -1,12 +1,13 @@
 import assert from 'assert';
 import evaParser from '../parser/evaParser';
+import {Eva} from '../Eva';
 
-export function test (eva, code, expected) {
-    const exp = evaParser.parse(code);
-    if ( typeof expected !== 'undefined') {
-        assert.strictEqual(eva.eval(exp), expected);
+export function test (eva: Eva, code: string, expected: any) {
+    const exp = evaParser.parse(`(begin ${code})`);
+    if (typeof expected !== 'undefined') {
+        assert.strictEqual(eva.evalGlobal(exp), expected);
     } else {
         // we only eval
-        eva.eval(exp);
+        eva.evalGlobal(exp);
     }
 }
