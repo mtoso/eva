@@ -1,5 +1,7 @@
 import { Environment } from './Environment';
 import { Transformer } from './transform/Transformer';
+import evaParser from './parser/evaParser';
+import fs from 'fs';
 
 interface StackFrame {
     env: Environment;
@@ -41,6 +43,9 @@ export type ClassExpression = ['class', string, string | null, Expression];
 export type ClassInstantiationExpression = ['new', string, ...any[]];
 export type ClassPropertyAccessExpression = ['prop', string, string];
 export type ClassSuperExpression = ['super', string];
+export type ModuleExpression = ['module', string, BlockExpression];
+export type ImportExpression = ['import', string[]|null, string];
+export type ExportsExpression = ['exorts', ...string[]];
 
 export type Expression =
     NumberLiteral
@@ -60,7 +65,10 @@ export type Expression =
     | ClassExpression
     | ClassInstantiationExpression
     | ClassPropertyAccessExpression
-    | ClassSuperExpression;
+    | ClassSuperExpression
+    | ModuleExpression
+    | ImportExpression
+    | ExportsExpression;
 
 /**
  * Eva interpreter
@@ -69,6 +77,7 @@ export class Eva {
     #global: Environment;
     #executionStack: StackFrame[];
     #transformer: Transformer;
+    #moduleCache: object;
 
     /**
      * Creates an instance of Eva with a global environment.
@@ -77,6 +86,7 @@ export class Eva {
         this.#global = global;        
         this.#executionStack = [];
         this.#transformer = new Transformer();
+        this.#moduleCache = Object.create(null);
     }
 
     /**
@@ -247,6 +257,53 @@ export class Eva {
             const [_tag, instance, name] = exp as ClassPropertyAccessExpression;
             const instanceEnv: Environment = this.eval(instance, env);
             return instanceEnv.lookup(name);
+        }
+
+        // Module declaration: (module <body>)
+        if (exp[0] === 'module') {
+            const [_tag, name, body] = exp as ModuleExpression;
+            const moduleEnv = new Environment({}, env);
+            this._evalBody(body, moduleEnv);
+            return env.define(name, moduleEnv);
+        }
+
+        // Exports expression: (exports export1, export2, ...)
+        if (exp[0] === 'exports') {
+            const [_tag, ...exports] = exp as ExportsExpression;
+            return exports.forEach(e => {
+                env.parent.define(e, env.lookup(e));
+            });
+        }
+
+        // Import expression: (import <name>)
+        // (import (export1, export2) <name>)
+        if (exp[0] === 'import') {
+            let name;
+            let namedImports;
+            if (Array.isArray(exp[1])) {
+                namedImports = exp[1];
+                name = exp[2];
+            } else {
+                name = exp[1];
+            }
+            
+            // Read the module from the cache if possible
+            const moduleSrc = this.#moduleCache[name] = this.#moduleCache[name] || fs.readFileSync(`${__dirname}/modules/${name}.eva`, 'utf-8');
+            
+            let body: BlockExpression = evaParser.parse(`(begin ${moduleSrc})`);
+            
+            if (namedImports) {
+                //@ts-ignore
+                body = body.filter(exp => {
+                    if (Array.isArray(exp)) {
+                        return namedImports.includes(exp[1])
+                    }
+                    return true;
+                });
+            }
+
+            const moduleExp: ModuleExpression = ['module', name, body];
+            return this.eval(moduleExp, this.#global);
         }
 
         // Function calls (execution):

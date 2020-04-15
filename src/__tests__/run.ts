@@ -13,6 +13,8 @@ const tests = [
     require('./switch-test'),
     require('./for-test'),
     require('./class-test'),
+    require('./module-test'),
+    require('./import-test'),
 ];
 
 const eva =  new Eva();
