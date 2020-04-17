@@ -3,6 +3,13 @@
 'use strict';
 
 const fs = require('fs');
+
+// Build if necessary
+if (!fs.existsSync(`${__dirname}/../build`)) {
+    const execa = require('execa');    
+    execa.commandSync('npm run build');
+}
+
 const evaParser = require('../build/parser/evaParser');
 const { Eva } = require('../build/Eva');
 
@@ -26,6 +33,12 @@ function main(argv) {
         const src = fs.readFileSync(exp, 'utf-8');
         return evalGlobal(src, eva);
     }
+
+    // start the REPL
+    const repl = require('repl');
+    repl.start({ prompt: 'eva > ', eval: (src, context, filename, callback) => {
+        callback(null, evalGlobal(src, eva));
+    }});
 }
 
 main(process.argv);

@@ -13,10 +13,11 @@
     "modules"
   ],
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Mattia Toso <mattia.toso@gmail.com>",
+  "license": "MIT",
   "devDependencies": {
     "@types/node": "^13.9.0",
+    "execa": "^4.0.0",
     "ts-node": "^8.6.2",
     "typescript": "^3.8.3"
   }
