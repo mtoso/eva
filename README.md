@@ -9,16 +9,16 @@ npm run build
 ```bash
 npm test
 ```
-### Run an expression from the cli
+### Run an expression
 ```bash
 ./bin/eva -e `(var x 10) (print x)`
 ```
 
-### Run an a file
+### Run *.eva files
 ```bash
 ./bin/eva -f ./test.eva
 ```
-### Run the REPL
+### Start the REPL
 ```bash
 ./bin/eva
 ```
