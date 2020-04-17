@@ -14,7 +14,7 @@ module.exports = (eva:Eva) => {
     test (
         eva,
         `
-            (import (abs square) Math)
+            (import (abs) Math)
             (abs (- 10))
         `,
         10

@@ -1,10 +1,17 @@
 {
-  "name": "eva",
+  "name": "eva-interpreter",
   "version": "1.0.0",
-  "description": "",
+  "description": "Interpreter for the Eva programming language",
+  "main": "./build/Eva.js",
   "scripts": {
+    "build": "tsc",
     "test": "ts-node ./src/__tests__/run.ts"
   },
+  "files": [
+    "bin",
+    "build",
+    "modules"
+  ],
   "keywords": [],
   "author": "",
   "license": "ISC",

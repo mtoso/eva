@@ -45,7 +45,7 @@ export type ClassPropertyAccessExpression = ['prop', string, string];
 export type ClassSuperExpression = ['super', string];
 export type ModuleExpression = ['module', string, BlockExpression];
 export type ImportExpression = ['import', string[]|null, string];
-export type ExportsExpression = ['exorts', ...string[]];
+export type ExportsExpression = ['exports', ...string[]];
 
 export type Expression =
     NumberLiteral
@@ -263,7 +263,9 @@ export class Eva {
         if (exp[0] === 'module') {
             const [_tag, name, body] = exp as ModuleExpression;
             const moduleEnv = new Environment({}, env);
+            // populate the moduleEnv
             this._evalBody(body, moduleEnv);
+            // define the env
             return env.define(name, moduleEnv);
         }
 
@@ -288,18 +290,22 @@ export class Eva {
             }
             
             // Read the module from the cache if possible
-            const moduleSrc = this.#moduleCache[name] = this.#moduleCache[name] || fs.readFileSync(`${__dirname}/modules/${name}.eva`, 'utf-8');
-            
+            const moduleSrc = this.#moduleCache[name] = this.#moduleCache[name] || fs.readFileSync(`${__dirname}/../modules/${name}.eva`, 'utf-8');            
             let body: BlockExpression = evaParser.parse(`(begin ${moduleSrc})`);
-            
+
             if (namedImports) {
-                //@ts-ignore
-                body = body.filter(exp => {
+                const namedImportsBody = <BlockExpression>body.filter(exp => {
                     if (Array.isArray(exp)) {
-                        return namedImports.includes(exp[1])
+                        // ignore the exports when we have named import
+                        if (exp[0] !== 'exports') {
+                            return namedImports.includes(exp[1])
+                        }
+                        return false;
                     }
                     return true;
-                });
+                });                
+                
+                return this._evalBlock(namedImportsBody, this.#global);
             }
 
             const moduleExp: ModuleExpression = ['module', name, body];
